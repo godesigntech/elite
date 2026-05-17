@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "credits": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Competition": {
+      "title": "Competition",
+      "description": "Information about a gaming competition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "prize": { "type": "string" },
+        "prizeImage": { "type": "string" },
+        "entryPrice": { "type": "number" },
+        "freeEntriesAllowed": { "type": "number" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "ended"] },
+        "gameType": { "type": "string" }
+      },
+      "required": ["title", "prize", "startDate", "endDate", "status"]
+    },
+    "Entry": {
+      "title": "Entry",
+      "description": "A single game attempt/entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "competitionId": { "type": "string" },
+        "score": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isFree": { "type": "boolean" }
+      },
+      "required": ["userId", "competitionId", "score", "timestamp"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "competitions/{competitionId}": {
+      "schema": "Competition",
+      "description": "Competition details"
+    },
+    "competitions/{competitionId}/entries/{entryId}": {
+      "schema": "Entry",
+      "description": "User entries for a competition"
+    },
+    "admins/{adminId}": {
+      "schema": { "type": "object", "properties": { "userId": { "type": "string" } } },
+      "description": "Collection of admin user IDs"
+    }
+  }
+}

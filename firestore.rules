@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email', 'role']) &&
+          data.uid == request.auth.uid &&
+          data.email == request.auth.token.email &&
+          data.role in ['user', 'admin'] &&
+          (data.get('credits', 0) is number);
+      }
+
+      allow create: if isOwner(userId) && isEmailVerified() && isValidUser(incoming());
+      allow update: if (isOwner(userId) || isAdmin()) && (
+        // Only allow updating specific fields if not admin
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'avatar'])) ||
+        isAdmin()
+      );
+    }
+
+    // --- Competitions ---
+    match /competitions/{competitionId} {
+      allow read: if true; // Publicly viewable prizes and leaderboards
+      
+      function isValidCompetition(data) {
+        return data.keys().hasAll(['title', 'prize', 'startDate', 'endDate', 'status']) &&
+          data.title is string && data.title.size() <= 200 &&
+          data.prize is string && data.prize.size() <= 1000 &&
+          data.status in ['active', 'ended'];
+      }
+
+      allow write: if isAdmin();
+    }
+
+    // --- Entries ---
+    match /competitions/{competitionId}/entries/{entryId} {
+      allow read: if true; // Everyone can see scores for the leaderboard
+      
+      function isValidEntry(data) {
+        return data.keys().hasAll(['userId', 'competitionId', 'score', 'timestamp']) &&
+          data.userId == request.auth.uid &&
+          data.competitionId == competitionId &&
+          data.score is number && data.score >= 0 && data.score <= 100 &&
+          data.timestamp == request.time;
+      }
+
+      allow create: if isEmailVerified() && isValidEntry(incoming()) && 
+        get(/databases/$(database)/documents/competitions/$(competitionId)).data.status == 'active';
+      
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Admins ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via Firebase Console or special script
+    }
+  }
+}
